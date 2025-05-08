@@ -3,7 +3,7 @@
  * Plugin Name: ACF field value in WooCommerce Cart and Checkout
  * Plugin URI:  https://spletodrom.si
  * Description: WordPress plugin which adds text (if a ACF field value exist) to the WooCommerce cart and checkout pages using Cart and Checkout Filters.
- * Version:     1.0.0
+ * Version:     1.2.0
  * Author:      Elvis Sedić
  * Author URI:  https://spletodrom.si
  * License:     GPL2
@@ -17,51 +17,59 @@ if (!defined('ABSPATH')) {
 class Custom_Cart_Text_Plugin {
     
     public function __construct() {
-        //add_action('wp_enqueue_scripts', [$this, 'enqueue_cart_filter_script']);
         add_filter('woocommerce_add_cart_item_data', [$this, 'store_delayed_delivery_field'], 10, 2);
         add_filter('woocommerce_get_item_data', [$this, 'display_delayed_delivery_field_in_cart'], 10, 2);
         add_action('woocommerce_cart_loaded_from_session', [$this, 'load_delayed_delivery_field'], 10, 1);
-        add_filter('woocommerce_get_cart_item_from_session', [$this, 'restore_delayed_delivery_from_session'], 10, 2); // NEW!
+        add_filter('woocommerce_get_cart_item_from_session', [$this, 'restore_delayed_delivery_from_session'], 10, 2);
     }
-
-    // public function enqueue_cart_filter_script() {
-    //     wp_register_script(
-    //         'custom-cart-text',
-    //         plugin_dir_url(__FILE__) . 'assets/js/custom-cart-text.js',
-    //         ['wp-hooks', 'wp-element', 'wp-data', 'wp-components', 'wp-blocks', 'wc-blocks-registry'],
-    //         filemtime(plugin_dir_path(__FILE__) . 'assets/js/custom-cart-text.js'),
-    //         true
-    //     );
-
-    //     if (is_cart() || is_checkout()) {
-    //         wp_enqueue_script('custom-cart-text');
-    //         wp_localize_script('custom-cart-text', 'cartData', [
-    //             'items' => WC()->cart->get_cart()
-    //         ]);
-    //     }
-    // }
 
     public function store_delayed_delivery_field($cart_item_data, $product_id) {
         if (function_exists('get_field')) {
             $delayed_delivery = get_field('delayed_delivery', $product_id);
+            $delayed_delivery_time = get_field('delayed_delivery_time', $product_id);
+
             if (is_array($delayed_delivery)) {
                 $delayed_delivery = reset($delayed_delivery); // Get first value if it's an array
             }
+
             if ($delayed_delivery == "1") {
-                $cart_item_data['delayed_delivery'] = 1; // Store the field in cart data
+                $cart_item_data['delayed_delivery'] = 1;
+
+                if (is_numeric($delayed_delivery_time)) {
+                    $cart_item_data['delayed_delivery_time'] = intval($delayed_delivery_time);
+                }
             }
         }
+
         return $cart_item_data;
     }
 
     public function display_delayed_delivery_field_in_cart($item_data, $cart_item) {
         if (!empty($cart_item['delayed_delivery'])) {
             $item_data[] = [
-                'name'  => __('Delayed Delivery', 'yootheme-child'),
-                'value' => __('This item has a delayed delivery!', 'yootheme-child')
+                'name'  => __('Delayed Delivery', 'woo-acf-delivery'),
+                'value' => __('This product has a delivery delay!', 'woo-acf-delivery')
             ];
+
+            if (!empty($cart_item['delayed_delivery_time'])) {
+                $weeks = intval($cart_item['delayed_delivery_time']);
+                $weeks_text = sprintf(
+                    _n(
+                        'Expected delivery time: in %d week.',
+                        'Expected delivery time: in %d weeks.',
+                        $weeks,
+                        'woo-acf-delivery'
+                    ),
+                    $weeks
+                );
+
+                $item_data[] = [
+                    'name'  => __('Delivery Time', 'woo-acf-delivery'),
+                    'value' => esc_html($weeks_text)
+                ];
+            }
         }
-        //error_log(print_r(WC()->cart->get_cart(), true));
+        error_log(print_r(WC()->cart->get_cart(), true));
 
         return $item_data;
     }
@@ -69,7 +77,11 @@ class Custom_Cart_Text_Plugin {
     public function load_delayed_delivery_field($cart) {
         foreach ($cart->get_cart() as $cart_item_key => $cart_item) {
             if (isset($cart_item['delayed_delivery'])) {
-                $cart->cart_contents[$cart_item_key]['delayed_delivery'] = 1; // Correct assignment
+                $cart->cart_contents[$cart_item_key]['delayed_delivery'] = 1;
+
+                if (isset($cart_item['delayed_delivery_time'])) {
+                    $cart->cart_contents[$cart_item_key]['delayed_delivery_time'] = intval($cart_item['delayed_delivery_time']);
+                }
             }
         }
     }
@@ -78,6 +90,11 @@ class Custom_Cart_Text_Plugin {
         if (isset($values['delayed_delivery'])) {
             $cart_item['delayed_delivery'] = $values['delayed_delivery'];
         }
+
+        if (isset($values['delayed_delivery_time'])) {
+            $cart_item['delayed_delivery_time'] = intval($values['delayed_delivery_time']);
+        }
+
         return $cart_item;
     }
 }
