@@ -61,6 +61,12 @@ class Woo_Acf_Delivery {
         
         // Display in order details
         add_filter('woocommerce_order_item_get_formatted_meta_data', array($this, 'format_delayed_delivery_order_meta'), 10, 2);
+
+        // Add nonce
+        add_action('woocommerce_before_add_to_cart_button', function() {
+            wp_nonce_field('woo_acf_delivery_nonce_action', 'woo_acf_delivery_nonce');
+        });
+
     }
     
     /**
@@ -94,6 +100,15 @@ class Woo_Acf_Delivery {
      * @return array Modified cart item data
      */
     public function store_delayed_delivery_field($cart_item_data, $product_id) {
+
+        // Check if nonce is present and valid
+        if (
+            !isset($_POST['woo_acf_delivery_nonce']) ||
+            !wp_verify_nonce(wp_unslash($_POST['woo_acf_delivery_nonce']), 'woo_acf_delivery_nonce_action')
+        ) {
+            return $cart_item_data;
+        }
+
         // Check if ACF is active
         if (!function_exists('get_field')) {
             return $cart_item_data;
